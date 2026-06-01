@@ -2,7 +2,7 @@ pipeline {
   agent { label 'linux' }
 
   tools {
-    nodejs 'node-20'
+    nodejs 'node-16'
   }
 
   environment {
