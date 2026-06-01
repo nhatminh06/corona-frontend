@@ -1,0 +1,30 @@
+image:
+  repository: harbor.lab:8080/library/corona-frontend
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+containerPort: 3000          # React dev server runs on 3000
+
+service:
+  type: NodePort
+  port: 3000
+  nodePort: 30080
+
+imagePullSecret: harbor-cred
+
+hpa:
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPU: 70
+
+config:
+  PORT: "3000"
+
+resources:
+  requests:
+    cpu: "100m"
+    memory: "256Mi"
+  limits:
+    cpu: "500m"
+    memory: "512Mi"
