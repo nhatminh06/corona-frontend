@@ -10,11 +10,42 @@ pipeline {
     NEXUS_BASE      = 'http://nexus.lab:8081'
     CHART_NAME      = 'corona-frontend'
     CHART_VERSION   = '0.1.0'
+    SONAR_HOST      = 'http://sonarqube.lab:9000'
   }
 
   stages {
     stage('Checkout') {
       steps { checkout scm }
+    }
+
+    stage('Security: secret scan (gitleaks)') {
+      steps {
+        sh '''
+          gitleaks detect --source . --no-banner --redact --exit-code 1 || \
+            { echo "Gitleaks found secrets — failing build"; exit 1; }
+        '''
+      }
+    }
+
+    stage('Security: SAST (semgrep)') {
+      steps {
+        sh '''
+          semgrep --config=auto --error --severity=ERROR --quiet . || \
+            { echo "Semgrep found high-severity issues — failing build"; exit 1; }
+        '''
+      }
+    }
+
+    stage('Security: code quality (sonarqube)') {
+      steps {
+        withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
+          sh '''
+            sonar-scanner \
+              -Dsonar.host.url=${SONAR_HOST} \
+              -Dsonar.token=${SONAR_TOKEN}
+          '''
+        }
+      }
     }
 
     stage('Fetch build config from Nexus') {
@@ -26,7 +57,6 @@ pipeline {
             curl -fsSL -u "$NEXUS_USER:$NEXUS_PASS" \
               -o .npmrc \
               ${NEXUS_BASE}/repository/build-config/npm/.npmrc
-            cat .npmrc
           '''
         }
       }
