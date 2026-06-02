@@ -22,3 +22,11 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# files fetched from Nexus at build time
+settings.xml
+.npmrc
+chart.tgz
+corona-backend/
+corona-frontend/
+
