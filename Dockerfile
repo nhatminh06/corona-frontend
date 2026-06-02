@@ -18,3 +18,6 @@ COPY . ./
 
 # start app
 CMD ["npm", "start"]
+
+# add nprmc
+COPY .npmrc ./
