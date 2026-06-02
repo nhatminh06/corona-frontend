@@ -1,10 +1,10 @@
 pipeline {
-  agent any
+  agent { label 'linux' }
 
   environment {
     HARBOR_REGISTRY = 'harbor.lab:8080'
     HARBOR_PROJECT  = 'library'
-    IMAGE_NAME      = 'corona-backend'
+    IMAGE_NAME      = 'corona-frontend'
     IMAGE_TAG       = "${env.BUILD_NUMBER}"
     FULL_IMAGE      = "${HARBOR_REGISTRY}/${HARBOR_PROJECT}/${IMAGE_NAME}:${IMAGE_TAG}"
   }
