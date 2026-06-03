@@ -1,6 +1,5 @@
 pipeline {
   agent { label 'linux' }
-
   environment {
     HARBOR_REGISTRY = 'harbor.lab:8080'
     HARBOR_PROJECT  = 'library'
@@ -12,12 +11,10 @@ pipeline {
     CHART_VERSION   = '0.1.0'
     SONAR_HOST      = 'http://sonarqube.lab:9000'
   }
-
   stages {
     stage('Checkout') {
       steps { checkout scm }
     }
-
     stage('Security: secret scan (gitleaks)') {
       steps {
         sh '''
@@ -26,16 +23,47 @@ pipeline {
         '''
       }
     }
-
     stage('Security: SAST (semgrep)') {
       steps {
         sh '''
-          semgrep --config=auto --error --severity=ERROR --quiet . || \
-            { echo "Semgrep found high-severity issues — failing build"; exit 1; }
+          set +e
+          semgrep --config=auto --severity=ERROR --quiet --error .
+          EXIT_CODE=$?
+          set -e
+
+          if [ "$EXIT_CODE" -ne 0 ]; then
+            echo ""
+            echo "=========================================="
+            echo "  Semgrep findings above. Failing build."
+            echo "=========================================="
+            exit 1
+          else
+            echo "Semgrep: no high-severity findings."
+          fi
         '''
       }
     }
+    stage('Security: SCA (trivy)') {
+      steps {
+        sh '''
+          set +e
+          trivy fs --severity HIGH,CRITICAL --exit-code 1 --no-progress .
+          EXIT_CODE=$?
+          set -e
 
+          if [ "$EXIT_CODE" -ne 0 ]; then
+            echo ""
+            echo "=========================================="
+            echo "  Trivy found HIGH/CRITICAL vulnerabilities."
+            echo "  Failing build."
+            echo "=========================================="
+            exit 1
+          else
+            echo "Trivy: no HIGH/CRITICAL vulnerabilities."
+          fi
+        '''
+      }
+    }
     stage('Security: code quality (sonarqube)') {
       steps {
         withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
@@ -47,7 +75,6 @@ pipeline {
         }
       }
     }
-
     stage('Fetch build config from Nexus') {
       steps {
         withCredentials([usernamePassword(credentialsId: 'nexus-creds',
@@ -61,13 +88,11 @@ pipeline {
         }
       }
     }
-
     stage('Build Docker image') {
       steps {
         sh "docker build --add-host=nexus.lab:10.146.183.167 -t ${FULL_IMAGE} ."
       }
     }
-
     stage('Push to Harbor') {
       steps {
         withCredentials([usernamePassword(credentialsId: 'harbor-creds',
@@ -81,8 +106,7 @@ pipeline {
         }
       }
     }
-
-    stage('Fetch Helm chart from Nexus') {
+    stage('Fetch & template Helm chart') {
       steps {
         withCredentials([usernamePassword(credentialsId: 'nexus-creds',
                                           usernameVariable: 'NEXUS_USER',
@@ -92,20 +116,12 @@ pipeline {
               -o chart.tgz \
               ${NEXUS_BASE}/repository/helm-charts/${CHART_NAME}-${CHART_VERSION}.tgz
             tar -xzf chart.tgz
+            helm template ${IMAGE_NAME} ./${CHART_NAME} --set image.tag=${IMAGE_TAG}
           '''
         }
       }
     }
-
-    stage('Helm template') {
-      steps {
-        withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
-          sh "helm template ${IMAGE_NAME} ./${CHART_NAME} --set image.tag=${IMAGE_TAG}"
-        }
-      }
-    }
-
-    stage('Helm upgrade') {
+    stage('Deploy') {
       steps {
         withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
           sh "helm upgrade --install ${IMAGE_NAME} ./${CHART_NAME} --set image.tag=${IMAGE_TAG} --namespace default"
@@ -113,7 +129,6 @@ pipeline {
       }
     }
   }
-
   post {
     always {
       sh 'docker rmi ${FULL_IMAGE} || true'
