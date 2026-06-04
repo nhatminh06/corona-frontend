@@ -9,6 +9,7 @@ RUN npm install react-scripts@3.4.1 -g --silent
 COPY . ./
 
 # Run as non-root (node:alpine has a built-in `node` user)
+RUN chown -R node:node /app
 USER node
 
 CMD ["npm", "start"]
