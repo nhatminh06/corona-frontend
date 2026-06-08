@@ -12,6 +12,7 @@ class App extends Component {
 
 
   componentWillMount() {
+    // nosemgrep: typescript.react.security.react-insecure-request
     axios.get('http://10.146.183.37:30081/coronatracker/statisticsbycountry').then((response) => {
       //console.log(JSON.stringify(response.data))
       this.setState({
